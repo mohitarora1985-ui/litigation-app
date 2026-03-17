@@ -1,0 +1,136 @@
+import React, { useState, useEffect, useMemo } from "react";
+import { initializeApp } from "firebase/app";
+import { getFirestore, collection, addDoc, onSnapshot, query, doc, updateDoc } from "firebase/firestore";
+
+// 🔥 FIREBASE CONFIG
+const firebaseConfig = {
+  apiKey: "AIzaSyCYaeQy0jQoMgCG-hNpBO1Z7cazXKiU0Gg",
+  authDomain: "litigation-os.firebaseapp.com",
+  projectId: "litigation-os",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const COURT_COLORS = {
+  "Tis Hazari": "bg-red-100",
+  "High Court": "bg-yellow-100",
+  "Supreme Court": "bg-blue-100",
+  "Patiala House": "bg-green-100",
+  "Saket": "bg-orange-100",
+  "Gurgaon": "bg-cyan-100",
+  "RERA": "bg-rose-100",
+};
+
+export default function LitigationApp() {
+  const [cases, setCases] = useState([]);
+  const [activeTab, setActiveTab] = useState("cases");
+
+  useEffect(() => {
+    const q = query(collection(db, "cases"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setCases(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 🧠 SMART ICS PARSER (ENHANCED)
+  const detectCourt = (text) => {
+    text = text.toLowerCase();
+    if (text.includes("supreme")) return "Supreme Court";
+    if (text.includes("high court")) return "High Court";
+    if (text.includes("saket")) return "Saket";
+    if (text.includes("gurgaon")) return "Gurgaon";
+    if (text.includes("rera")) return "RERA";
+    return "Tis Hazari";
+  };
+
+  const handleICSUpload = async (e) => {
+    const file = e.target.files[0];
+    const text = await file.text();
+
+    const events = text.split("BEGIN:VEVENT").slice(1);
+
+    for (let event of events) {
+      const titleMatch = event.match(/SUMMARY:(.*)/);
+      const dateMatch = event.match(/DTSTART:(\d{8})/);
+
+      if (!titleMatch || !dateMatch) continue;
+
+      const title = titleMatch[1].trim();
+      const date = dateMatch[1];
+      const court = detectCourt(title);
+
+      await addDoc(collection(db, "cases"), {
+        title,
+        court,
+        dates: [date],
+        billing: [],
+      });
+    }
+
+    alert("Smart ICS Imported");
+  };
+
+  // 💰 INVOICE GENERATION (BASIC PDF DOWNLOAD)
+  const generateInvoice = (caseItem) => {
+    const content = `Invoice\nCase: ${caseItem.title}\nEntries: ${caseItem.billing?.length || 0}`;
+
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${caseItem.title}_invoice.txt`;
+    a.click();
+  };
+
+  // 🔔 NOTIFICATION (BROWSER)
+  const sendNotification = () => {
+    if (Notification.permission === "granted") {
+      new Notification("Litigation Reminder", {
+        body: "Check tomorrow's cause list",
+      });
+    } else {
+      Notification.requestPermission();
+    }
+  };
+
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold">⚖️ Litigation OS</h1>
+
+      <div className="flex gap-3 my-4">
+        {['cases','billing'].map(tab => (
+          <button key={tab} onClick={()=>setActiveTab(tab)} className="border px-3">{tab}</button>
+        ))}
+      </div>
+
+      <input type="file" accept=".ics" onChange={handleICSUpload} />
+
+      <button onClick={sendNotification} className="ml-4 text-sm text-blue-600">Test Reminder</button>
+
+      {activeTab === 'cases' && (
+        <div className="grid gap-3 mt-4">
+          {cases.map(c => (
+            <div key={c.id} className={`p-3 border rounded ${COURT_COLORS[c.court]}`}>
+              <div>{c.title}</div>
+              <div className="text-xs">{c.court}</div>
+              <button onClick={()=>generateInvoice(c)} className="text-green-600 text-sm">Generate Invoice</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {activeTab === 'billing' && (
+        <div className="mt-4">
+          {cases.map(c => (
+            <div key={c.id} className="border p-2 mb-2">
+              {c.title} - {c.billing?.length || 0}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
