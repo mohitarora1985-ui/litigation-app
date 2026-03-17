@@ -2,15 +2,87 @@
 <html>
 <head>
   <title>Litigation OS</title>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
-<body>
-  <h1>⚖️ Litigation OS</h1>
+<body style="font-family: Arial; padding:20px;">
 
-  <input type="file" id="icsFile" />
-  <button onclick="alert('Upload working (next step we connect logic)')">
-    Upload ICS
-  </button>
+<h1>⚖️ Litigation OS</h1>
 
-  <p>Your app is live 🎉</p>
+<input type="file" id="icsFile" />
+<button onclick="uploadICS()">Upload ICS</button>
+
+<h3>📂 Cases</h3>
+<div id="cases"></div>
+
+<script>
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCYaeQy0jQoMgCG-hNpBO1Z7cazXKiU0Gg",
+  authDomain: "litigation-os.firebaseapp.com",
+  projectId: "litigation-os",
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+function detectCourt(text) {
+  text = text.toLowerCase();
+  if (text.includes("supreme")) return "Supreme Court";
+  if (text.includes("high court")) return "High Court";
+  if (text.includes("saket")) return "Saket";
+  if (text.includes("gurgaon")) return "Gurgaon";
+  if (text.includes("rera")) return "RERA";
+  return "Tis Hazari";
+}
+
+async function uploadICS() {
+  const file = document.getElementById('icsFile').files[0];
+  const text = await file.text();
+
+  const events = text.split("BEGIN:VEVENT").slice(1);
+
+  for (let event of events) {
+    const titleMatch = event.match(/SUMMARY:(.*)/);
+    const dateMatch = event.match(/DTSTART:(\d{8})/);
+
+    if (!titleMatch || !dateMatch) continue;
+
+    const title = titleMatch[1].trim();
+    const date = dateMatch[1];
+    const court = detectCourt(title);
+
+    await db.collection("cases").add({
+      title,
+      date,
+      court
+    });
+  }
+
+  alert("ICS Imported Successfully");
+}
+
+function loadCases() {
+  db.collection("cases").onSnapshot(snapshot => {
+    const container = document.getElementById("cases");
+    container.innerHTML = "";
+
+    snapshot.forEach(doc => {
+      const c = doc.data();
+      container.innerHTML += `
+        <div style="border:1px solid #ccc; padding:10px; margin:5px;">
+          <b>${c.title}</b><br/>
+          ${c.court}<br/>
+          ${c.date}
+        </div>
+      `;
+    });
+  });
+}
+
+loadCases();
+
+</script>
+
 </body>
 </html>
