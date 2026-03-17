@@ -36,11 +36,25 @@ function detectCourt(text) {
   return "Tis Hazari";
 }
 
+function isRelevantCase(title) {
+  const t = title.toLowerCase();
+
+  // ignore junk calendar entries
+  if (t.includes("meeting") || t.includes("conference") || t.includes("call")) return false;
+
+  // include legal patterns
+  if (t.includes("vs") || t.includes("v.") || t.includes("court") || t.includes("petition") || t.includes("appeal")) return true;
+
+  return false;
+}
+
 async function uploadICS() {
   const file = document.getElementById('icsFile').files[0];
   const text = await file.text();
 
   const events = text.split("BEGIN:VEVENT").slice(1);
+
+  let count = 0;
 
   for (let event of events) {
     const titleMatch = event.match(/SUMMARY:(.*)/);
@@ -49,6 +63,9 @@ async function uploadICS() {
     if (!titleMatch || !dateMatch) continue;
 
     const title = titleMatch[1].trim();
+
+    if (!isRelevantCase(title)) continue; // 🔥 filter
+
     const date = dateMatch[1];
     const court = detectCourt(title);
 
@@ -57,9 +74,11 @@ async function uploadICS() {
       date,
       court
     });
+
+    count++;
   }
 
-  alert("ICS Imported Successfully");
+  alert(count + " cases imported (filtered)");
 }
 
 function loadCases() {
